@@ -145,6 +145,7 @@ iphone/Maps/app.omaps/
 # CMake
 cmake-build-*
 build/
+build-*/
 
 qt/res/Info.plist
 
