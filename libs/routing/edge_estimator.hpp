@@ -1,5 +1,6 @@
 #pragma once
 
+#include "routing/router.hpp"
 #include "routing/segment.hpp"
 #include "routing/vehicle_mask.hpp"
 
@@ -59,6 +60,12 @@ public:
                                                std::shared_ptr<TrafficStash> trafficStash, DataSource * dataSourcePtr,
                                                std::shared_ptr<NumMwmIds> numMwmIds);
 
+  /// RouterType-aware overload: selects BikeCommuteEstimator when routerType == RouterType::BikeCommute.
+  static std::shared_ptr<EdgeEstimator> Create(VehicleType vehicleType, RouterType routerType,
+                                               double maxWeighSpeedKMpH, SpeedKMpH const & offroadSpeedKMpH,
+                                               std::shared_ptr<TrafficStash> trafficStash, DataSource * dataSourcePtr,
+                                               std::shared_ptr<NumMwmIds> numMwmIds);
+
 private:
   double const m_maxWeightSpeedMpS;
   SpeedKMpH const m_offroadSpeedKMpH;
@@ -74,6 +81,7 @@ private:
 
 double GetPedestrianClimbPenalty(EdgeEstimator::Purpose purpose, double tangent, geometry::Altitude altitudeM);
 double GetBicycleClimbPenalty(EdgeEstimator::Purpose purpose, double tangent, geometry::Altitude altitudeM);
+double GetBikeCommuteClimbPenalty(EdgeEstimator::Purpose purpose, double tangent, geometry::Altitude altitudeM);
 double GetCarClimbPenalty(EdgeEstimator::Purpose purpose, double tangent, geometry::Altitude altitudeM);
 
 }  // namespace routing

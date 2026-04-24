@@ -32,12 +32,13 @@ struct EdgeProj
 enum class RouterType
 {
   // @TODO It's necessary to rename Vehicle value to Car.
-  Vehicle = 0,  /// For Car routing.
-  Pedestrian,   /// For A star pedestrian routing.
-  Bicycle,      /// For A star bicycle routing.
-  Transit,      /// For A star pedestrian + transit routing.
-  Ruler,        /// For simple straight line router.
-  Count         /// Number of router types.
+  Vehicle = 0,    /// For Car routing.
+  Pedestrian,     /// For A star pedestrian routing.
+  Bicycle,        /// For A star bicycle routing.
+  Transit,        /// For A star pedestrian + transit routing.
+  Ruler,          /// For simple straight line router.
+  BikeCommute,    /// For LTS-optimised utility cycling (commuters, parents with children).
+  Count           /// Number of router types.
 };
 
 std::string ToString(RouterType type);

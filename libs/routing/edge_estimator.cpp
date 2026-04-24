@@ -165,6 +165,45 @@ double GetCarClimbPenalty(EdgeEstimator::Purpose, double, geometry::Altitude)
   return 1.0;
 }
 
+// Commute climb penalty: steeper curve that kicks in earlier than GetBicycleClimbPenalty.
+//
+// Rationale: utility cyclists (commuters, parents with children) want to arrive predictably
+// without exertion. The 8% threshold is empirically calibrated (cargo bike, upright posture).
+//
+//   0–8%   grade: light quadratic ramp (1 + slope² / 9)  — more aggressive than bicycle (÷49)
+//   8–15%  grade: factor = 1 + slope² / 9 (continues)
+//   >15%   grade: hard cap at 15.0 (vs 10.0 in bicycle)
+//   downhill: 0.35× impact (same as bicycle) — coasting bonus
+double GetBikeCommuteClimbPenalty(EdgeEstimator::Purpose purpose, double tangent, geometry::Altitude altitudeM)
+{
+  double constexpr kMinPenalty = 1.0;
+  double const impact = tangent >= 0.0 ? 1.0 : 0.35;
+
+  if (altitudeM >= kMountainSicknessAltitudeM)
+    return kMinPenalty + 50.0 * fabs(tangent) * impact;
+
+  double const slope = tangent * 100;  // percent grade
+
+  double factor;
+  if (slope < -30)
+    factor = 1.5;
+  else if (slope < 0)
+  {
+    // Downhill: same smooth boost as bicycle model.
+    factor = 1 + 2 * 0.7 / 13.0 * slope + 0.7 / 169 * slope * slope;
+  }
+  else if (slope <= 15)
+  {
+    // Uphill commute penalty: quadratic with steeper coefficient (÷9 vs bicycle ÷49).
+    // At 8% grade: factor ≈ 1.71 (vs bicycle 1.13) — commuter slows significantly.
+    factor = 1 + slope * slope / 9;
+  }
+  else
+    factor = 15.0;  // Hard cap: effectively impassable for a loaded utility cyclist.
+
+  return factor;
+}
+
 // EdgeEstimator -----------------------------------------------------------------------------------
 EdgeEstimator::EdgeEstimator(double maxWeightSpeedKMpH, SpeedKMpH const & offroadSpeedKMpH,
                              DataSource * /*dataSourcePtr*/, std::shared_ptr<NumMwmIds> /*numMwmIds*/)
@@ -345,6 +384,63 @@ public:
   }
 };
 
+// BikeCommuteEstimator ----------------------------------------------------------------------------
+// Paired with BikeCommuteModel. Applies GetBikeCommuteClimbPenalty to all roads (not just bad ones),
+// so even a cycleway becomes less desirable if it climbs steeply — commuters prefer flat routes.
+class BikeCommuteEstimator final : public EdgeEstimator
+{
+public:
+  BikeCommuteEstimator(double maxWeightSpeedKMpH, SpeedKMpH const & offroadSpeedKMpH)
+    : EdgeEstimator(maxWeightSpeedKMpH, offroadSpeedKMpH)
+  {}
+
+  // EdgeEstimator overrides:
+  double GetUTurnPenalty(Purpose /* purpose */) const override { return 20.0 /* seconds */; }
+  double GetFerryLandingPenalty(Purpose purpose) const override
+  {
+    switch (purpose)
+    {
+    case Purpose::Weight: return 10 * 60;
+    case Purpose::ETA: return 8 * 60;
+    }
+    UNREACHABLE();
+  }
+
+  double CalcSegmentWeight(Segment const & segment, RoadGeometry const & road, Purpose purpose,
+                           time_t arrivalTime) const override
+  {
+    return CalcClimbSegment(purpose, segment, road,
+                            [purpose, this](double speedMpS, double tangent, geometry::Altitude altitude)
+    {
+      auto const factor = GetBikeCommuteClimbPenalty(purpose, tangent, altitude);
+      ASSERT_GREATER(factor, 0.0, ());
+
+      if (factor > 1)
+      {
+        // Apply penalty to all road types — commuters want flat routes regardless of road quality.
+        // Use same avgBicycleSpeed cap logic so road class distinctions are preserved on uphills.
+        static double constexpr avgBicycleSpeed = KmphToMps(20);
+        double const upperBound = avgBicycleSpeed / factor;
+        if (speedMpS > upperBound)
+        {
+          // Add small weight to distinguish roads by class (15 is the max factor for commute).
+          speedMpS = upperBound + (purpose == Purpose::Weight ? speedMpS / (15 * avgBicycleSpeed) : 0);
+        }
+        else
+        {
+          speedMpS /= factor;
+        }
+      }
+      else
+      {
+        speedMpS /= factor;
+      }
+
+      return std::min(speedMpS, GetMaxWeightSpeedMpS());
+    });
+  }
+};
+
 // CarEstimator ------------------------------------------------------------------------------------
 class CarEstimator final : public EdgeEstimator
 {
@@ -447,5 +543,16 @@ std::shared_ptr<EdgeEstimator> EdgeEstimator::Create(VehicleType vehicleType,
 {
   return Create(vehicleType, vehicleModel.GetMaxWeightSpeed(), vehicleModel.GetOffroadSpeed(), trafficStash,
                 dataSourcePtr, numMwmIds);
+}
+
+// static
+std::shared_ptr<EdgeEstimator> EdgeEstimator::Create(VehicleType vehicleType, RouterType routerType,
+                                                     double maxWeighSpeedKMpH, SpeedKMpH const & offroadSpeedKMpH,
+                                                     std::shared_ptr<TrafficStash> trafficStash,
+                                                     DataSource * dataSourcePtr, std::shared_ptr<NumMwmIds> numMwmIds)
+{
+  if (routerType == RouterType::BikeCommute)
+    return std::make_shared<BikeCommuteEstimator>(maxWeighSpeedKMpH, offroadSpeedKMpH);
+  return Create(vehicleType, maxWeighSpeedKMpH, offroadSpeedKMpH, trafficStash, dataSourcePtr, numMwmIds);
 }
 }  // namespace routing

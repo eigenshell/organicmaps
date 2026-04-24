@@ -94,6 +94,11 @@ VehicleModel::LimitsInitList const kDefaultOptions = {
     {HighwayType::ManMadePier, true},
     {HighwayType::RouteFerry, true}};
 
+VehicleModel::LimitsInitList const & DefaultOptions()
+{
+  return kDefaultOptions;
+}
+
 // Same as defaults except trunk and trunk_link are not allowed
 VehicleModel::LimitsInitList NoTrunk()
 {

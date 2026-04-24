@@ -88,8 +88,20 @@ unique_ptr<IndexRouter> CreateVehicleRouter(DataSource & dataSource, storage::Co
   TEST(!numMwmIds->IsEmpty(), ());
 
   bool const loadAltitudes = vehicleType != VehicleType::Car;
+  auto const routerType = [vehicleType]() {
+    switch (vehicleType)
+    {
+    case VehicleType::Car:        return RouterType::Vehicle;
+    case VehicleType::Bicycle:    return RouterType::Bicycle;
+    case VehicleType::Pedestrian: return RouterType::Pedestrian;
+    case VehicleType::Transit:    return RouterType::Transit;
+    case VehicleType::Count:      return RouterType::Vehicle;
+    }
+    UNREACHABLE();
+  }();
   auto indexRouter =
-      make_unique<IndexRouter>(vehicleType, loadAltitudes, *countryParentGetter, countryFileGetter, getMwmRectByName,
+      make_unique<IndexRouter>(vehicleType, routerType, loadAltitudes, *countryParentGetter,
+                               countryFileGetter, getMwmRectByName,
                                numMwmIds, MakeNumMwmTree(*numMwmIds, infoGetter), trafficCache, dataSource);
 
   return indexRouter;

@@ -188,6 +188,7 @@ VehicleType GetVehicleType(RouterType routerType)
   {
   case RouterType::Pedestrian: return VehicleType::Pedestrian;
   case RouterType::Bicycle: return VehicleType::Bicycle;
+  case RouterType::BikeCommute: return VehicleType::Bicycle;  // reuses bicycle graph data
   case RouterType::Vehicle: return VehicleType::Car;
   case RouterType::Transit: return VehicleType::Transit;
   case RouterType::Ruler: return VehicleType::Transit;
@@ -475,6 +476,7 @@ RouterType RoutingManager::GetLastUsedRouter() const
   {
   case RouterType::Pedestrian:
   case RouterType::Bicycle:
+  case RouterType::BikeCommute:
   case RouterType::Transit:
   case RouterType::Ruler: return routerType;
   default: return RouterType::Vehicle;
@@ -525,7 +527,7 @@ void RoutingManager::SetRouterImpl(RouterType type)
     auto const getMwmRectByName = [this](std::string const & countryId)
     { return m_callbacks.m_countryInfoGetter().GetLimitRectForLeaf(countryId); };
 
-    router = std::make_unique<IndexRouter>(vehicleType, m_loadAltitudes, m_callbacks.m_countryParentNameGetterFn,
+    router = std::make_unique<IndexRouter>(vehicleType, type, m_loadAltitudes, m_callbacks.m_countryParentNameGetterFn,
                                            countryFileGetter, getMwmRectByName, m_numMwmIDs, m_numMwmTree,
                                            m_routingSession, dataSource);
     absentFinder = std::make_unique<AbsentRegionsFinder>(countryFileGetter, localFileChecker, m_numMwmIDs, dataSource);
@@ -699,6 +701,7 @@ bool RoutingManager::InsertRoute(Route const & route)
       break;
     }
     case RouterType::Bicycle:
+    case RouterType::BikeCommute:
     {
       subroute->m_routeType = df::RouteType::Bicycle;
       subroute->AddStyle(df::SubrouteStyle(df::kRouteBicycle, df::RoutePattern(8.0, 2.0)));

@@ -26,6 +26,7 @@
 #include "transit/transit_entities.hpp"
 
 #include "routing_common/bicycle_model.hpp"
+#include "routing_common/bike_commute_model.hpp"
 #include "routing_common/car_model.hpp"
 #include "routing_common/pedestrian_model.hpp"
 
@@ -94,13 +95,16 @@ SpeedKMpH const & CalcOffroadSpeed(VehicleModelFactoryInterface const & vehicleM
 }
 
 std::shared_ptr<VehicleModelFactoryInterface> CreateVehicleModelFactory(
-    VehicleType vehicleType, CountryParentNameGetterFn const & countryParentNameGetterFn)
+    VehicleType vehicleType, RouterType routerType, CountryParentNameGetterFn const & countryParentNameGetterFn)
 {
   switch (vehicleType)
   {
   case VehicleType::Pedestrian:
   case VehicleType::Transit: return std::make_shared<PedestrianModelFactory>(countryParentNameGetterFn);
-  case VehicleType::Bicycle: return std::make_shared<BicycleModelFactory>(countryParentNameGetterFn);
+  case VehicleType::Bicycle:
+    if (routerType == RouterType::BikeCommute)
+      return std::make_shared<BikeCommuteModelFactory>(countryParentNameGetterFn);
+    return std::make_shared<BicycleModelFactory>(countryParentNameGetterFn);
   case VehicleType::Car: return std::make_shared<CarModelFactory>(countryParentNameGetterFn);
   case VehicleType::Count: CHECK(false, ("Can't create VehicleModelFactoryInterface for", vehicleType)); return nullptr;
   }
@@ -227,16 +231,16 @@ double IndexRouter::BestEdgeComparator::GetSquaredDist(Edge const & edge) const
 }
 
 // IndexRouter ------------------------------------------------------------------------------------
-IndexRouter::IndexRouter(VehicleType vehicleType, bool loadAltitudes,
+IndexRouter::IndexRouter(VehicleType vehicleType, RouterType routerType, bool loadAltitudes,
                          CountryParentNameGetterFn const & countryParentNameGetterFn,
                          TCountryFileFn const & countryFileFn, CountryRectFn const & countryRectFn,
                          std::shared_ptr<NumMwmIds> numMwmIds, std::shared_ptr<m4::Tree<NumMwmId>> numMwmTree,
                          traffic::TrafficCache const & trafficCache, DataSource & dataSource)
   : m_vehicleType(vehicleType)
   , m_loadAltitudes(loadAltitudes)
-  , m_name("astar-bidirectional-" + ToString(m_vehicleType))
+  , m_name("astar-bidirectional-" + ToString(routerType))
   , m_dataSource(dataSource, numMwmIds)
-  , m_vehicleModelFactory(CreateVehicleModelFactory(m_vehicleType, countryParentNameGetterFn))
+  , m_vehicleModelFactory(CreateVehicleModelFactory(m_vehicleType, routerType, countryParentNameGetterFn))
   , m_countryFileFn(countryFileFn)
   , m_countryRectFn(countryRectFn)
   , m_numMwmIds(std::move(numMwmIds))
@@ -247,9 +251,10 @@ IndexRouter::IndexRouter(VehicleType vehicleType, bool loadAltitudes,
                     ? IRoadGraph::Mode::IgnoreOnewayTag
                     : IRoadGraph::Mode::ObeyOnewayTag,
                 m_vehicleModelFactory)
-  , m_estimator(EdgeEstimator::Create(m_vehicleType, CalcMaxSpeed(*m_numMwmIds, *m_vehicleModelFactory, m_vehicleType),
-                                      CalcOffroadSpeed(*m_vehicleModelFactory), m_trafficStash, &dataSource,
-                                      m_numMwmIds))
+  , m_estimator(EdgeEstimator::Create(m_vehicleType, routerType,
+                                      CalcMaxSpeed(*m_numMwmIds, *m_vehicleModelFactory, m_vehicleType),
+                                      CalcOffroadSpeed(*m_vehicleModelFactory),
+                                      m_trafficStash, &dataSource, m_numMwmIds))
   , m_directionsEngine(CreateDirectionsEngine(m_vehicleType, m_numMwmIds, m_dataSource))
   , m_countryParentNameGetterFn(countryParentNameGetterFn)
 {

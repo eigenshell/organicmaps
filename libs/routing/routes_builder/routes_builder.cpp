@@ -273,8 +273,20 @@ void RoutesBuilder::Processor::InitRouter(VehicleType type)
   if (!m_dataSource)
     m_dataSource = m_dataSourceStorage.GetDataSource();
 
-  m_router = std::make_unique<IndexRouter>(type, loadAltitudes, *m_cpg.lock(), countryFileGetter, getMwmRectByName,
-                                           m_numMwmIds, MakeNumMwmTree(*m_numMwmIds, *m_cig.lock()), *m_trafficCache,
+  RouterType const routerType = [type]() {
+    switch (type)
+    {
+    case VehicleType::Car:        return RouterType::Vehicle;
+    case VehicleType::Bicycle:    return RouterType::Bicycle;
+    case VehicleType::Pedestrian: return RouterType::Pedestrian;
+    case VehicleType::Transit:    return RouterType::Transit;
+    case VehicleType::Count:      return RouterType::Vehicle;
+    }
+    UNREACHABLE();
+  }();
+  m_router = std::make_unique<IndexRouter>(type, routerType, loadAltitudes, *m_cpg.lock(), countryFileGetter,
+                                           getMwmRectByName, m_numMwmIds,
+                                           MakeNumMwmTree(*m_numMwmIds, *m_cig.lock()), *m_trafficCache,
                                            *m_dataSource);
 }
 

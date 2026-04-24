@@ -2,6 +2,16 @@
 
 #include "routing_common/vehicle_model.hpp"
 
+// Helper functions for access-limit lists used by bicycle-based routing models.
+// Defined in bicycle_model.cpp; exposed here so BikeCommuteModel can reuse them.
+namespace bicycle_model
+{
+routing::VehicleModel::LimitsInitList NoTrunk();
+routing::VehicleModel::LimitsInitList AllAllowed();
+routing::VehicleModel::LimitsInitList UkraineOptions();
+routing::VehicleModel::LimitsInitList const & DefaultOptions();
+}  // namespace bicycle_model
+
 namespace routing
 {
 
